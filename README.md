@@ -1,13 +1,7 @@
 <p align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="/program_info/org.prismlauncher.PrismLauncher.logo-darkmode.svg">
-  <source media="(prefers-color-scheme: light)" srcset="/program_info/org.prismlauncher.PrismLauncher.logo.svg">
-  <img alt="Prism Launcher" src="/program_info/org.prismlauncher.PrismLauncher.logo.svg" width="40%">
-</picture>
-</p>
 
 <p align="center">
-  <img src="/program_info/org.prismlauncher.PrismLauncher.logo.svg" alt="Bunny Launcher Logo" width="40%">
+  <img src="/program_info/bunny.svg" alt="Bunny Launcher Logo" width="40%">
 </p>
 
 <p align="center">
