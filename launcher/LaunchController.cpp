@@ -55,6 +55,7 @@
 #include <QPushButton>
 #include <QStringList>
 
+
 #include "BuildConfig.h"
 #include "JavaCommon.h"
 #include "launch/steps/TextPrint.h"
@@ -79,70 +80,14 @@ void LaunchController::executeTask()
 
 void LaunchController::decideAccount()
 {
-    if (m_accountToUse) {
-        return;
-    }
-
-    // Find an account to use.
-    auto accounts = APPLICATION->accounts();
-    if (accounts->count() <= 0 || !accounts->anyAccountIsValid()) {
-        // Tell the user they need to log in at least one account in order to play.
-        auto reply = CustomMessageBox::selectable(m_parentWidget, tr("No Accounts"),
-                                                  tr("In order to play Minecraft, you must have at least one Microsoft "
-                                                     "account which owns Minecraft logged in. "
-                                                     "Would you like to open the account manager to add an account now?"),
-                                                  QMessageBox::Information, QMessageBox::Yes | QMessageBox::No)
-                         ->exec();
-
-        if (reply == QMessageBox::Yes) {
-            // Open the account manager.
-            APPLICATION->ShowGlobalSettings(m_parentWidget, "accounts");
-        } else if (reply == QMessageBox::No) {
-            // Do not open "profile select" dialog.
-            return;
-        }
-    }
-
-    // Select the account to use. If the instance has a specific account set, that will be used. Otherwise, the default account will be used
-    auto instanceAccountId = m_instance->settings()->get("InstanceAccountId").toString();
-    auto instanceAccountIndex = accounts->findAccountByProfileId(instanceAccountId);
-    if (instanceAccountIndex == -1 || instanceAccountId.isEmpty()) {
-        m_accountToUse = accounts->defaultAccount();
-    } else {
-        m_accountToUse = accounts->at(instanceAccountIndex);
-    }
-
-    if (!m_accountToUse) {
-        // If no default account is set, ask the user which one to use.
-        ProfileSelectDialog selectDialog(tr("Which account would you like to use?"), ProfileSelectDialog::GlobalDefaultCheckbox,
-                                         m_parentWidget);
-
-        selectDialog.exec();
-
-        // Launch the instance with the selected account.
-        m_accountToUse = selectDialog.selectedAccount();
-
-        // If the user said to use the account as default, do that.
-        if (selectDialog.useAsGlobalDefault() && m_accountToUse) {
-            accounts->setDefaultAccount(m_accountToUse);
-        }
-    }
+    auto accounts = APPLICATION->accounts(); // Retrieve the accounts from the application context
+    m_accountToUse = accounts->defaultAccount(); // Use the default account directly
 }
+
 
 bool LaunchController::askPlayDemo()
 {
-    QMessageBox box(m_parentWidget);
-    box.setWindowTitle(tr("Play demo?"));
-    box.setText(
-        tr("This account does not own Minecraft.\nYou need to purchase the game first to play it.\n\nDo you want to play "
-           "the demo?"));
-    box.setIcon(QMessageBox::Warning);
-    auto demoButton = box.addButton(tr("Play Demo"), QMessageBox::ButtonRole::YesRole);
-    auto cancelButton = box.addButton(tr("Cancel"), QMessageBox::ButtonRole::NoRole);
-    box.setDefaultButton(cancelButton);
-
-    box.exec();
-    return box.clickedButton() == demoButton;
+    return false; 
 }
 
 QString LaunchController::askOfflineName(QString playerName, bool demo, bool& ok)
@@ -169,13 +114,10 @@ void LaunchController::login()
 {
     decideAccount();
 
+    // Directly allow offline play without checking for a Microsoft account
     if (!m_accountToUse) {
-        // if no account is selected, ask about demo
-        if (!m_demo) {
-            m_demo = askPlayDemo();
-        }
+        m_demo = askPlayDemo(); // Ask if they want to play demo
         if (m_demo) {
-            // we ask the user for a player name
             bool ok = false;
             auto name = askOfflineName("Player", m_demo, ok);
             if (ok) {
@@ -185,8 +127,7 @@ void LaunchController::login()
                 return;
             }
         }
-        // if no account is selected, we bail
-        emitFailed(tr("No account selected for launch."));
+        emitFailed(tr("No account selected for launch.")); // Still handle the case where no account is selected
         return;
     }
 
@@ -240,8 +181,8 @@ void LaunchController::login()
                     }
                     m_session->MakeOffline(name);
                     // offline flavored game from here :3
-                }
-                if (m_accountToUse->ownsMinecraft()) {
+                } else {
+                    // Check if the account has a profile set up
                     if (!m_accountToUse->hasProfile()) {
                         // Now handle setting up a profile name here...
                         ProfileSetupDialog dialog(m_accountToUse, m_parentWidget);
@@ -253,21 +194,9 @@ void LaunchController::login()
                             return;
                         }
                     }
-                    // we own Minecraft, there is a profile, it's all ready to go!
                     launchInstance();
                     return;
-                } else {
-                    // play demo ?
-                    if (!m_session->demo) {
-                        m_session->demo = askPlayDemo();
-                    }
-                    if (m_session->demo) {  // play demo here
-                        launchInstance();
-                    } else {
-                        emitFailed(tr("Launch cancelled - account does not own Minecraft."));
-                    }
                 }
-                return;
             }
             case AccountState::Errored:
                 // This means some sort of soft error that we can fix with a refresh ... so let's refresh.

@@ -82,6 +82,10 @@ class MainWindow : public QMainWindow {
     void updatesAllowedChanged(bool allowed);
 
     void processURLs(QList<QUrl> urls);
+
+    void updateUIElements();          
+    void saveMainWindowState();       
+
    signals:
     void isClosing();
 

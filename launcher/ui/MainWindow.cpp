@@ -144,9 +144,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->setupUi(this);
 
     setWindowIcon(APPLICATION->getThemedIcon("logo"));
-    setWindowTitle(APPLICATION->applicationDisplayName());
+    setWindowTitle("Bunny Launcher");
 #ifndef QT_NO_ACCESSIBILITY
-    setAccessibleName(BuildConfig.LAUNCHER_DISPLAYNAME);
+    setAccessibleName("Bunny Launcher");
 #endif
 
     // instance toolbar stuff
@@ -285,8 +285,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
         view = new InstanceView(ui->centralWidget);
 
         view->setSelectionMode(QAbstractItemView::SingleSelection);
-        // FIXME: leaks ListViewDelegate
-        view->setItemDelegate(new ListViewDelegate(this));
+        auto delegate = std::make_unique<ListViewDelegate>(this);
+        view->setItemDelegate(delegate.get());
         view->setFrameShape(QFrame::NoFrame);
         // do not show ugly blue border on the mac
         view->setAttribute(Qt::WA_MacShowFocusRect, false);
@@ -478,25 +478,42 @@ void MainWindow::lockToolbars(bool state)
 
 void MainWindow::konamiTriggered()
 {
+    
     QString gradient =
-        " stop:0 rgba(125, 0, 0, 255), stop:0.166 rgba(125, 125, 0, 255), stop:0.333 rgba(0, 125, 0, 255), stop:0.5 rgba(0, 125, 125, "
-        "255), stop:0.666 rgba(0, 0, 125, 255), stop:0.833 rgba(125, 0, 125, 255), stop:1 rgba(125, 0, 0, 255));";
+        " stop:0 rgba(255, 255, 255, 255), stop:0.166 rgba(255, 165, 0, 255), stop:0.333 rgba(255, 255, 0, 255), stop:0.5 rgba(0, 255, 0, "
+        "255), stop:0.666 rgba(0, 255, 255, 255), stop:0.833 rgba(255, 0, 255, 255), stop:1 rgba(255, 255, 255, 255));";
     QString stylesheet = "background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0," + gradient;
+
     if (ui->mainToolBar->styleSheet() == stylesheet) {
         ui->mainToolBar->setStyleSheet("");
         ui->instanceToolBar->setStyleSheet("");
         ui->centralWidget->setStyleSheet("");
         ui->newsToolBar->setStyleSheet("");
         ui->statusBar->setStyleSheet("");
-        qDebug() << "Super Secret Mode DEACTIVATED!";
+        qDebug() << "Rabbit Mode DEACTIVATED!";
     } else {
         ui->mainToolBar->setStyleSheet(stylesheet);
         ui->instanceToolBar->setStyleSheet("background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:0, y2:1," + gradient);
         ui->centralWidget->setStyleSheet("background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1," + gradient);
         ui->newsToolBar->setStyleSheet(stylesheet);
         ui->statusBar->setStyleSheet(stylesheet);
-        qDebug() << "Super Secret Mode ACTIVATED!";
+        qDebug() << "Rabbit Mode ACTIVATED!";
     }
+
+    
+    QApplication::setOverrideCursor(Qt::CrossCursor);
+    QTimer::singleShot(1000, this, [this] {
+        QApplication::setOverrideCursor(Qt::ArrowCursor);
+    });
+
+
+    
+    QPropertyAnimation *animation = new QPropertyAnimation(this, "geometry");
+    animation->setDuration(1000);
+    animation->setStartValue(QRect(0, 0, 800, 600));
+    animation->setEndValue(QRect(10, 10, 800, 600));
+    animation->setEasingCurve(QEasingCurve::OutBounce);
+    animation->start();
 }
 
 void MainWindow::showInstanceContextMenu(const QPoint& pos)
@@ -643,32 +660,24 @@ void MainWindow::repopulateAccountsMenu()
         ui->actionNoAccountsAdded->setEnabled(false);
         ui->accountsMenu->addAction(ui->actionNoAccountsAdded);
     } else {
-        // TODO: Nicer way to iterate?
-        for (int i = 0; i < accounts->count(); i++) {
-            MinecraftAccountPtr account = accounts->at(i);
+        for (auto i = 0; i < accounts->count(); ++i) {
+            auto account = accounts->at(i);
             auto profileLabel = profileInUseFilter(account->profileName(), account->isInUse());
-            QAction* action = new QAction(profileLabel, this);
+            auto action = new QAction(profileLabel, this);
             action->setData(i);
             action->setCheckable(true);
             action->setActionGroup(accountsGroup);
-            if (defaultAccount == account) {
-                action->setChecked(true);
-            }
+            action->setChecked(defaultAccount == account);
 
             auto face = account->getFace();
-            if (!face.isNull()) {
-                action->setIcon(face);
-            } else {
-                action->setIcon(APPLICATION->getThemedIcon("noaccount"));
-            }
+            action->setIcon(face.isNull() ? APPLICATION->getThemedIcon("noaccount") : face);
 
-            const int highestNumberKey = 9;
-            if (i < highestNumberKey) {
+            if (i < 10) {
                 action->setShortcut(QKeySequence(tr("Ctrl+%1").arg(i + 1)));
             }
 
             ui->accountsMenu->addAction(action);
-            connect(action, SIGNAL(triggered(bool)), SLOT(changeActiveAccount()));
+            connect(action, &QAction::triggered, this, &MainWindow::changeActiveAccount);
         }
     }
 
@@ -724,7 +733,6 @@ void MainWindow::defaultAccountChanged()
 
     MinecraftAccountPtr account = APPLICATION->accounts()->defaultAccount();
 
-    // FIXME: this needs adjustment for MSA
     if (account && account->profileName() != "") {
         auto profileLabel = profileInUseFilter(account->profileName(), account->isInUse());
         ui->actionAccountsButton->setText(profileLabel);
@@ -737,7 +745,7 @@ void MainWindow::defaultAccountChanged()
         return;
     }
 
-    // Set the icon to the "no account" icon.
+    
     ui->actionAccountsButton->setIcon(APPLICATION->getThemedIcon("noaccount"));
     ui->actionAccountsButton->setText(tr("Accounts"));
 }
@@ -1244,18 +1252,26 @@ void MainWindow::on_actionSettings_triggered()
 
 void MainWindow::globalSettingsClosed()
 {
-    // FIXME: quick HACK to make this work. improve, optimize.
+    
     APPLICATION->instances()->loadList();
     proxymodel->invalidate();
     proxymodel->sort(0);
+    updateUIElements();
+    saveMainWindowState();
+    update();
+}
+
+void MainWindow::updateUIElements()
+{
     updateMainToolBar();
     updateLaunchButton();
     updateThemeMenu();
     updateStatusCenter();
-    // This needs to be done to prevent UI elements disappearing in the event the config is changed
-    // but Prism Launcher exits abnormally, causing the window state to never be saved:
+}
+
+void MainWindow::saveMainWindowState()
+{
     APPLICATION->settings()->set("MainWindowState", saveState().toBase64());
-    update();
 }
 
 void MainWindow::on_actionEditInstance_triggered()
@@ -1486,13 +1502,18 @@ void MainWindow::on_actionKillInstance_triggered()
 
 void MainWindow::on_actionCreateInstanceShortcut_triggered()
 {
-    if (!m_selectedInstance)
+    if (!m_selectedInstance) {
+        QMessageBox::warning(this, tr("Create instance shortcut"), tr("No instance selected. Please select an instance to create a shortcut."));
         return;
-    auto desktopPath = FS::getDesktopDir();
+    }
+    QString desktopPath = FS::getDesktopDir();
     if (desktopPath.isEmpty()) {
-        // TODO come up with an alternative solution (open "save file" dialog)
-        QMessageBox::critical(this, tr("Create instance shortcut"), tr("Couldn't find desktop?!"));
-        return;
+        QString saveLocation = QFileDialog::getExistingDirectory(this, tr("Select Shortcut Save Location"), QDir::homePath());
+        if (saveLocation.isEmpty()) {
+            QMessageBox::warning(this, tr("Create instance shortcut"), tr("No location selected. Shortcut creation cancelled."));
+            return;
+        }
+        desktopPath = saveLocation;
     }
 
     QString desktopFilePath;
